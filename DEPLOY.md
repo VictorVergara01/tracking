@@ -90,6 +90,31 @@ ya en el dashboard) y reiniciá el servicio del tunnel.
 - Entrá con `manager / manager123` (cambiá las credenciales demo después).
 - API y docs: `https://trackflow.tudominio.com/docs`.
 
+## 6. Datos de ejemplo (opcional, para demos)
+
+Pobla el dashboard con procesos de muestra (tiempos por etapa ya medidos, un
+proceso atrasado, uno completo con lead time, cuello de botella):
+
+```bash
+cd /opt/tracking/server
+.venv/bin/python seed_demo.py           # crea/repone los procesos "[Demo]"
+.venv/bin/python seed_demo.py --clear    # los borra
+```
+No tocan tus procesos reales (se reconocen por el prefijo `[Demo]`). Es
+idempotente: podés correrlo las veces que quieras.
+
+---
+
+## ✅ Checklist antes de producción / v1
+
+- [ ] `TRACKFLOW_SECRET` propio y fuerte (`openssl rand -hex 32`), no la clave de dev.
+- [ ] Cambiar o borrar las credenciales demo (`manager`, `cliente1`, `cliente2`).
+- [ ] `systemctl status trackflow` en `active (running)` y `enable`d (arranca solo).
+- [ ] nginx + tunnel: el dominio responde por HTTPS y redirige `/` → `/ui/`.
+- [ ] Probar end-to-end en el dominio: login web, crear proceso, avanzar etapa.
+- [ ] Plan de backup de `server/app.db` (copiá también `app.db-wal` si existe).
+- [ ] (opcional) `seed_demo.py` si querés datos de muestra para la presentación.
+
 ---
 
 ## Actualizaciones

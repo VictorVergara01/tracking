@@ -38,6 +38,17 @@ const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+function fmtSeconds(seconds) {
+  let s = Math.max(Math.floor(seconds), 0);
+  const d = Math.floor(s / 86400); s -= d * 86400;
+  const h = Math.floor(s / 3600); s -= h * 3600;
+  const m = Math.floor(s / 60);
+  if (d) return `${d}d ${h}h`;
+  if (h) return `${h}h ${m}m`;
+  if (m) return `${m}m`;
+  return '<1m';
+}
+
 async function api(path, { method = 'GET', body = null } = {}) {
   const headers = {};
   if (state.token) headers['Authorization'] = 'Bearer ' + state.token;
