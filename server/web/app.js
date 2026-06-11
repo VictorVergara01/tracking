@@ -188,10 +188,12 @@ function processCard(p, manager) {
   return `
     <div class="process-card">
       <div class="card-head">
-        <h3>${esc(p.name)}</h3>
+        <h3 class="card-title">${esc(p.name)}</h3>
+        ${manager ? `<div class="card-actions">${controls}</div>` : ''}
+      </div>
+      <div class="card-badges">
         <span class="badge ${p.status}">${p.status}</span>
         ${overdue}
-        ${controls}
       </div>
       <div class="client-line">Cliente: ${esc(p.client_name)}</div>
       ${meta.length ? `<div class="meta-line">${meta.join('   ·   ')}</div>` : ''}
