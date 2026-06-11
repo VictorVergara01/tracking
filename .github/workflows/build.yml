@@ -1,0 +1,64 @@
+name: Build desktop client
+
+# Builds the TrackFlow client for Windows (.exe) and macOS (.app) in the cloud.
+# Trigger manually (Actions tab -> Run workflow) or by pushing a version tag
+# like v1.0.0, which also attaches the binaries to a GitHub Release.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows
+          - os: macos-latest
+            name: macos
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build with PyInstaller
+        run: pyinstaller --noconfirm trackflow.spec
+
+      - name: Package Windows
+        if: matrix.name == 'windows'
+        run: |
+          mkdir release
+          copy dist\TrackFlow.exe release\TrackFlow.exe
+        shell: cmd
+
+      - name: Package macOS
+        if: matrix.name == 'macos'
+        run: |
+          mkdir -p release
+          # Zip preserves the .app bundle structure for distribution.
+          cd dist && zip -ry ../release/TrackFlow-macos.zip TrackFlow.app
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TrackFlow-${{ matrix.name }}
+          path: release/*
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*

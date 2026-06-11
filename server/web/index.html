@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TrackFlow</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ============ LOGIN ============ -->
+  <section id="loginView" class="auth-wrap">
+    <div class="auth-card">
+      <h1 class="brand-title">TrackFlow</h1>
+      <p class="muted center">Sistema de Monitoreo de Procesos</p>
+
+      <div id="loginForm">
+        <label>Usuario</label>
+        <input id="loginUser" type="text" placeholder="Nombre de usuario" autocomplete="username" />
+        <label>Contraseña</label>
+        <input id="loginPass" type="password" placeholder="Contraseña" autocomplete="current-password" />
+        <button id="loginBtn" class="btn btn-primary btn-block">Ingresar</button>
+        <p id="loginError" class="error"></p>
+        <p class="center"><a href="#" id="toRegister" class="link">¿No tienes cuenta? Crear cuenta</a></p>
+        <p class="hint center">Gerente: manager / manager123<br>Cliente: cliente1 / cliente123</p>
+      </div>
+
+      <div id="registerForm" class="hidden">
+        <label>Nombre completo</label>
+        <input id="regName" type="text" placeholder="Nombre completo" />
+        <label>Usuario</label>
+        <input id="regUser" type="text" placeholder="Mínimo 3 caracteres" />
+        <label>Contraseña</label>
+        <input id="regPass" type="password" placeholder="Mínimo 6 caracteres" />
+        <label>Confirmar contraseña</label>
+        <input id="regPass2" type="password" placeholder="Repite la contraseña" />
+        <label>Rol</label>
+        <select id="regRole">
+          <option value="client">Cliente</option>
+          <option value="manager">Gerente</option>
+        </select>
+        <button id="registerBtn" class="btn btn-primary btn-block">Crear cuenta</button>
+        <p id="regError" class="error"></p>
+        <p class="center"><a href="#" id="toLogin" class="link">Volver a iniciar sesión</a></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ APP ============ -->
+  <section id="appView" class="hidden">
+    <header class="topbar">
+      <span class="topbar-brand">TrackFlow</span>
+      <span class="spacer"></span>
+      <span id="userLabel" class="user-label"></span>
+      <nav class="tabs">
+        <button id="tabDash" class="tab hidden" data-view="dash">Dashboard</button>
+        <button id="tabTrack" class="tab" data-view="track">Mis Procesos</button>
+        <button id="tabHelp" class="tab">Tutorial</button>
+        <button id="logoutBtn" class="tab">Cerrar Sesión</button>
+      </nav>
+    </header>
+
+    <main class="content">
+      <!-- Manager dashboard -->
+      <div id="dashView" class="hidden">
+        <div class="page-head">
+          <h2>Dashboard de Procesos</h2>
+          <button id="newProcessBtn" class="btn btn-primary">+ Nuevo Proceso</button>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card"><div class="stat-num" id="statTotal" style="color:#0f3460">0</div><div class="stat-label">Total</div></div>
+          <div class="stat-card"><div class="stat-num" id="statProgress" style="color:#e67e22">0</div><div class="stat-label">En Progreso</div></div>
+          <div class="stat-card"><div class="stat-num" id="statCompleted" style="color:#1b9c6d">0</div><div class="stat-label">Completados</div></div>
+          <div class="stat-card"><div class="stat-num" id="statPending" style="color:#95a5a6">0</div><div class="stat-label">Pendientes</div></div>
+        </div>
+        <div id="bottleneck" class="indicator-panel"></div>
+        <div id="dashList" class="process-list"></div>
+      </div>
+
+      <!-- Client / tracking view -->
+      <div id="trackView" class="hidden">
+        <h2>Mis Procesos</h2>
+        <div id="trackList" class="process-list"></div>
+      </div>
+    </main>
+  </section>
+
+  <!-- ============ MODAL: crear/editar proceso ============ -->
+  <div id="modalOverlay" class="modal-overlay hidden">
+    <div class="modal">
+      <h3 id="modalTitle">Nuevo Proceso</h3>
+      <label>Nombre del Proceso</label>
+      <input id="pName" type="text" placeholder="Ej: Fabricación de pieza X" />
+      <label>Descripción</label>
+      <textarea id="pDesc" rows="2" placeholder="Descripción del proceso"></textarea>
+      <label>Cliente</label>
+      <select id="pClient"></select>
+      <div class="row">
+        <label class="check-inline"><input id="pDueCheck" type="checkbox" /> Fecha límite</label>
+        <input id="pDue" type="date" disabled />
+      </div>
+      <div id="templateRow">
+        <label>Plantilla</label>
+        <select id="pTemplate"></select>
+      </div>
+      <label>Etapas del Proceso</label>
+      <div id="stageRows" class="stage-rows"></div>
+      <button id="addStageBtn" class="btn btn-light btn-sm">+ Agregar Etapa</button>
+      <p id="modalError" class="error"></p>
+      <div class="modal-actions">
+        <button id="modalCancel" class="btn btn-light">Cancelar</button>
+        <button id="modalSave" class="btn btn-primary">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: tutorial ============ -->
+  <div id="tutorialOverlay" class="modal-overlay hidden">
+    <div class="modal tutorial">
+      <div id="tutIcon" class="tut-icon"></div>
+      <h3 id="tutTitle"></h3>
+      <div id="tutBody" class="tut-body"></div>
+      <div class="modal-actions tut-actions">
+        <a href="#" id="tutSkip" class="link">Saltar tutorial</a>
+        <span id="tutStep" class="muted"></span>
+        <span class="spacer"></span>
+        <button id="tutBack" class="btn btn-light">Anterior</button>
+        <button id="tutNext" class="btn btn-primary">Siguiente</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

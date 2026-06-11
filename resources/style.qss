@@ -137,10 +137,55 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
     margin-top: 10px;
 }
 
+#linkBtn {
+    background: transparent;
+    color: #0f3460;
+    border: none;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px;
+}
+
+#linkBtn:hover {
+    color: #1a4a7a;
+    text-decoration: underline;
+}
+
+QPushButton:disabled {
+    background: #c5c8cc;
+    color: #f0f0f0;
+}
+
+QComboBox QAbstractItemView {
+    border: 1px solid #ddd;
+    background: white;
+    selection-background-color: #0f3460;
+    selection-color: white;
+    outline: none;
+}
+
 QDialog {
     background: white;
 }
 
 QLabel {
     background: transparent;
+}
+
+/* Onboarding walkthrough */
+#walkTitle {
+    font-size: 22px;
+    font-weight: 700;
+    color: #1a1a2e;
+}
+
+#walkStep {
+    color: #999;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+#walkFooter {
+    background: #f7f8fa;
+    border-top: 1px solid #e8e8e8;
 }

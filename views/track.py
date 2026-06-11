@@ -1,13 +1,15 @@
+from html import escape
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-                              QScrollArea, QFrame)
+                              QScrollArea, QFrame, QPushButton, QMessageBox)
 from PyQt6.QtCore import Qt, QTimer
-from sqlalchemy import select
-from database import Process, get_session
+from api_client import api, ApiError
 
 
 class TimelineItem(QFrame):
-    def __init__(self, stage_data):
+    def __init__(self, stage_data, on_advance):
         super().__init__()
+        self.stage_id = stage_data['id']
+        self.on_advance = on_advance
         status = stage_data['status']
         colors = {
             'completed': ('#1b9c6d', '#e2f7ed', '✔'),
@@ -31,7 +33,7 @@ class TimelineItem(QFrame):
         layout.addWidget(marker)
 
         info = QVBoxLayout()
-        name = QLabel(f'<b>{stage_data["name"]}</b>')
+        name = QLabel(f'<b>{escape(stage_data["name"])}</b>')
         name.setTextFormat(Qt.TextFormat.RichText)
         info.addWidget(name)
         if stage_data['assigned_to']:
@@ -39,11 +41,28 @@ class TimelineItem(QFrame):
         status_label = QLabel(f'Estado: {stage_data["status"]}')
         status_label.setStyleSheet(f'color: {dot_color}; font-size: 12px;')
         info.addWidget(status_label)
+        if status == 'completed' and stage_data.get('duration_text'):
+            dur = QLabel(f'⏱ Duró {stage_data["duration_text"]}')
+            dur.setStyleSheet('color: #1b9c6d; font-size: 11px;')
+            info.addWidget(dur)
         layout.addLayout(info, 1)
+
+        if status == 'pending':
+            btn = QPushButton('Iniciar')
+            btn.setStyleSheet('background: #0f3460; color: white; border: none; '
+                              'border-radius: 6px; padding: 6px 16px; font-weight: 600;')
+            btn.clicked.connect(lambda: self.on_advance(self.stage_id))
+            layout.addWidget(btn)
+        elif status == 'in_progress':
+            btn = QPushButton('Completar')
+            btn.setStyleSheet('background: #1b9c6d; color: white; border: none; '
+                              'border-radius: 6px; padding: 6px 16px; font-weight: 600;')
+            btn.clicked.connect(lambda: self.on_advance(self.stage_id))
+            layout.addWidget(btn)
 
 
 class ProcessTrackCard(QFrame):
-    def __init__(self, process_data):
+    def __init__(self, process_data, on_advance):
         super().__init__()
         self.setStyleSheet('''
             ProcessTrackCard {
@@ -55,7 +74,7 @@ class ProcessTrackCard(QFrame):
         layout.setSpacing(10)
 
         header = QHBoxLayout()
-        title = QLabel(f'<h3 style="margin:0">{process_data["name"]}</h3>')
+        title = QLabel(f'<h3 style="margin:0">{escape(process_data["name"])}</h3>')
         title.setTextFormat(Qt.TextFormat.RichText)
         header.addWidget(title, 1)
 
@@ -70,11 +89,28 @@ class ProcessTrackCard(QFrame):
             f'background: {sc[0]}; color: {sc[1]}; border-radius: 10px; '
             f'padding: 3px 12px; font-weight: 600; font-size: 12px;')
         header.addWidget(badge)
+
+        if process_data.get('overdue'):
+            overdue_badge = QLabel('  ⚠ Atrasado  ')
+            overdue_badge.setStyleSheet(
+                'background: #fdecea; color: #e94560; border-radius: 10px; '
+                'padding: 3px 12px; font-weight: 700; font-size: 12px;')
+            header.addWidget(overdue_badge)
         layout.addLayout(header)
 
-        client_label = QLabel(f'Cliente: {process_data["client_name"]}')
+        client_label = QLabel(f'Cliente: {escape(process_data["client_name"])}')
         client_label.setStyleSheet('color: #666; font-size: 13px;')
         layout.addWidget(client_label)
+
+        meta_bits = []
+        if process_data.get('due_text'):
+            meta_bits.append(f'Entrega: {process_data["due_text"]}')
+        if process_data.get('lead_text'):
+            meta_bits.append(f'Lead time: {process_data["lead_text"]}')
+        if meta_bits:
+            meta = QLabel('   ·   '.join(meta_bits))
+            meta.setStyleSheet('color: #888; font-size: 12px;')
+            layout.addWidget(meta)
 
         progress = process_data['progress']
         bar_container = QFrame()
@@ -102,7 +138,7 @@ class ProcessTrackCard(QFrame):
         timeline_layout.setContentsMargins(0, 0, 0, 0)
 
         for s in process_data['stages']:
-            timeline_layout.addWidget(TimelineItem(s))
+            timeline_layout.addWidget(TimelineItem(s, on_advance))
 
         layout.addWidget(timeline_frame)
 
@@ -111,6 +147,7 @@ class TrackView(QWidget):
     def __init__(self, user):
         super().__init__()
         self.user = user
+        self._last_snapshot = None
         self._setup_ui()
         self._refresh_timer = QTimer()
         self._refresh_timer.timeout.connect(self._load_data)
@@ -136,31 +173,31 @@ class TrackView(QWidget):
         self._load_data()
 
     def _load_data(self):
-        with get_session() as session:
-            stmt = select(Process).order_by(Process.created_at.desc())
-            if self.user.role == 'client':
-                stmt = stmt.where(Process.client_id == self.user.id)
-            result = session.execute(stmt)
-            processes = result.scalars().all()
+        try:
+            snapshot = api.list_processes()  # scoped to this user by the token
+        except ApiError:
+            return  # transient network blip; keep last state (5s timer retries)
 
-            while self.scroll_layout.count():
-                item = self.scroll_layout.takeAt(0)
-                if item.widget():
-                    item.widget().deleteLater()
+        # Skip the rebuild when nothing changed so the 5s timer doesn't flicker
+        # the cards or reset the scroll position.
+        if snapshot == self._last_snapshot:
+            return
+        self._last_snapshot = snapshot
 
-            for p in processes:
-                data = {
-                    'id': p.id,
-                    'name': p.name,
-                    'status': p.status,
-                    'progress': p.progress(),
-                    'client_name': p.client.name if p.client else 'N/A',
-                    'stages': [{
-                        'id': s.id,
-                        'name': s.name,
-                        'status': s.status,
-                        'assigned_to': s.assigned_to or '',
-                    } for s in p.stages],
-                }
-                self.scroll_layout.addWidget(ProcessTrackCard(data))
-            self.scroll_layout.addStretch()
+        while self.scroll_layout.count():
+            item = self.scroll_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        for data in snapshot:
+            self.scroll_layout.addWidget(
+                ProcessTrackCard(data, self._advance_stage))
+        self.scroll_layout.addStretch()
+
+    def _advance_stage(self, stage_id):
+        try:
+            api.advance_stage(stage_id)  # server enforces ownership
+        except ApiError as exc:
+            QMessageBox.warning(self, 'Error', str(exc))
+            return
+        self._load_data()

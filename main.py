@@ -4,10 +4,12 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                               QHBoxLayout, QLabel, QPushButton, QStackedWidget,
                               QMessageBox)
 from PyQt6.QtCore import Qt
-from database import init_db
+from api_client import api, ApiError
 from auth import LoginDialog
 from views.dashboard import DashboardView
 from views.track import TrackView
+from views.onboarding import WalkthroughDialog
+from views.settings import SettingsDialog
 
 
 class MainWindow(QMainWindow):
@@ -53,6 +55,11 @@ class MainWindow(QMainWindow):
         self.track_btn.clicked.connect(lambda: self.stack.setCurrentIndex(1))
         toolbar_layout.addWidget(self.track_btn)
 
+        self.settings_btn = QPushButton('Configuración')
+        self.settings_btn.setObjectName('toolBtn')
+        self.settings_btn.clicked.connect(self._open_settings)
+        toolbar_layout.addWidget(self.settings_btn)
+
         self.logout_btn = QPushButton('Cerrar Sesión')
         self.logout_btn.setObjectName('toolBtn')
         self.logout_btn.clicked.connect(self._logout)
@@ -71,30 +78,41 @@ class MainWindow(QMainWindow):
             self._update_ui()
             self.setVisible(True)
             self.show()
+            self._maybe_onboard()
         else:
             sys.exit()
 
+    def _maybe_onboard(self):
+        """Show the guided walkthrough the first time a user logs in."""
+        if self.user and not self.user['onboarded']:
+            WalkthroughDialog(self.user['role'], self).exec()
+            try:
+                api.mark_onboarded()
+            except ApiError:
+                pass  # non-critical; tutorial just won't be marked seen
+            self.user['onboarded'] = True
+
+    def _open_settings(self):
+        if self.user:
+            SettingsDialog(self.user, self).exec()
+
     def _update_ui(self):
-        role_text = 'Gerente' if self.user.role == 'manager' else 'Cliente'
+        role_text = 'Gerente' if self.user['role'] == 'manager' else 'Cliente'
         self.user_label.setText(
-            f'{self.user.name}  |  <span style="color:#e94560;font-weight:600;">{role_text}</span>')
+            f'{self.user["name"]}  |  <span style="color:#e94560;font-weight:600;">{role_text}</span>')
         self.user_label.setTextFormat(Qt.TextFormat.RichText)
 
-        self.dash_btn.setVisible(self.user.role == 'manager')
+        self.dash_btn.setVisible(self.user['role'] == 'manager')
 
         while self.stack.count():
             w = self.stack.widget(0)
             self.stack.removeWidget(w)
             w.deleteLater()
 
-        if self.user.role == 'manager':
+        if self.user['role'] == 'manager':
             self.stack.addWidget(DashboardView())
         self.stack.addWidget(TrackView(self.user))
-
-        if self.user.role == 'manager':
-            self.stack.setCurrentIndex(0)
-        else:
-            self.stack.setCurrentIndex(0)
+        self.stack.setCurrentIndex(0)
 
     def _logout(self):
         reply = QMessageBox.question(
@@ -102,19 +120,26 @@ class MainWindow(QMainWindow):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
             self.user = None
+            api.logout()
             self._show_login()
+
+
+def _resource_path(rel):
+    """Resolve a bundled resource both when running from source and when frozen
+    by PyInstaller (which unpacks data files under sys._MEIPASS)."""
+    base = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, rel)
 
 
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName('TrackFlow')
 
-    style_path = os.path.join(os.path.dirname(__file__), 'resources', 'style.qss')
+    style_path = _resource_path(os.path.join('resources', 'style.qss'))
     if os.path.exists(style_path):
-        with open(style_path, 'r') as f:
+        with open(style_path, 'r', encoding='utf-8') as f:
             app.setStyleSheet(f.read())
 
-    init_db()
     window = MainWindow()
     sys.exit(app.exec())
 

@@ -1,10 +1,24 @@
-from datetime import datetime
+from html import escape
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                               QPushButton, QScrollArea, QFrame, QMessageBox)
 from PyQt6.QtCore import Qt, QTimer
-from sqlalchemy import select
-from database import Process, Stage, User, get_session
+from api_client import api, ApiError
 from views.process_dialog import ProcessDialog
+
+
+def _fmt_seconds(seconds):
+    """Compact duration text from a number of seconds (for the bottleneck avg)."""
+    secs = max(int(seconds), 0)
+    days, rem = divmod(secs, 86400)
+    hours, rem = divmod(rem, 3600)
+    mins, _ = divmod(rem, 60)
+    if days:
+        return f'{days}d {hours}h'
+    if hours:
+        return f'{hours}h {mins}m'
+    if mins:
+        return f'{mins}m'
+    return '<1m'
 
 
 class StatCard(QFrame):
@@ -58,11 +72,15 @@ class StageWidget(QFrame):
         layout.addWidget(dot)
 
         info = QVBoxLayout()
-        name = QLabel(f'<b>{stage_data["name"]}</b>')
+        name = QLabel(f'<b>{escape(stage_data["name"])}</b>')
         name.setTextFormat(Qt.TextFormat.RichText)
         info.addWidget(name)
         if stage_data['assigned_to']:
             info.addWidget(QLabel(f'Responsable: {stage_data["assigned_to"]}'))
+        if status == 'completed' and stage_data.get('duration_text'):
+            dur = QLabel(f'⏱ {stage_data["duration_text"]}')
+            dur.setStyleSheet('color: #1b9c6d; font-size: 11px;')
+            info.addWidget(dur)
         layout.addLayout(info, 1)
 
         if status == 'pending':
@@ -84,10 +102,11 @@ class StageWidget(QFrame):
 
 
 class ProcessCard(QFrame):
-    def __init__(self, process_data, on_advance, on_delete, parent=None):
+    def __init__(self, process_data, on_advance, on_delete, on_edit, parent=None):
         super().__init__(parent)
         self.process_id = process_data['id']
         self.on_delete = on_delete
+        self.on_edit = on_edit
         self.setStyleSheet('''
             ProcessCard {
                 background: white; border-radius: 12px;
@@ -99,7 +118,7 @@ class ProcessCard(QFrame):
         layout.setSpacing(8)
 
         header = QHBoxLayout()
-        title = QLabel(f'<h3 style="margin:0">{process_data["name"]}</h3>')
+        title = QLabel(f'<h3 style="margin:0">{escape(process_data["name"])}</h3>')
         title.setTextFormat(Qt.TextFormat.RichText)
         header.addWidget(title, 1)
 
@@ -115,6 +134,22 @@ class ProcessCard(QFrame):
             f'padding: 3px 12px; font-weight: 600; font-size: 12px;')
         header.addWidget(badge)
 
+        if process_data.get('overdue'):
+            overdue_badge = QLabel('  ⚠ Atrasado  ')
+            overdue_badge.setStyleSheet(
+                'background: #fdecea; color: #e94560; border-radius: 10px; '
+                'padding: 3px 12px; font-weight: 700; font-size: 12px;')
+            header.addWidget(overdue_badge)
+
+        edit_btn = QPushButton('✎')
+        edit_btn.setFixedSize(28, 28)
+        edit_btn.setToolTip('Editar proceso')
+        edit_btn.setStyleSheet(
+            'background: transparent; border: 1px solid #0f3460; color: #0f3460; '
+            'border-radius: 14px; font-weight: 700;')
+        edit_btn.clicked.connect(lambda: self.on_edit(self.process_id))
+        header.addWidget(edit_btn)
+
         del_btn = QPushButton('✕')
         del_btn.setFixedSize(28, 28)
         del_btn.setStyleSheet(
@@ -125,9 +160,19 @@ class ProcessCard(QFrame):
 
         layout.addLayout(header)
 
-        client_label = QLabel(f'Cliente: {process_data["client_name"]}')
+        client_label = QLabel(f'Cliente: {escape(process_data["client_name"])}')
         client_label.setStyleSheet('color: #666; font-size: 13px;')
         layout.addWidget(client_label)
+
+        meta_bits = []
+        if process_data.get('due_text'):
+            meta_bits.append(f'Entrega: {process_data["due_text"]}')
+        if process_data.get('lead_text'):
+            meta_bits.append(f'Lead time: {process_data["lead_text"]}')
+        if meta_bits:
+            meta = QLabel('   ·   '.join(meta_bits))
+            meta.setStyleSheet('color: #888; font-size: 12px;')
+            layout.addWidget(meta)
 
         progress = process_data['progress']
         bar_container = QFrame()
@@ -159,6 +204,7 @@ class ProcessCard(QFrame):
 class DashboardView(QWidget):
     def __init__(self):
         super().__init__()
+        self._last_snapshot = None
         self._setup_ui()
         self._refresh_timer = QTimer()
         self._refresh_timer.timeout.connect(self._load_data)
@@ -195,6 +241,20 @@ class DashboardView(QWidget):
         self.stats_grid.addWidget(self.stat_pending)
         layout.addLayout(self.stats_grid)
 
+        # Industrial-engineering indicator: current bottleneck stage.
+        self.indicator_panel = QFrame()
+        self.indicator_panel.setObjectName('indicatorPanel')
+        self.indicator_panel.setStyleSheet(
+            '#indicatorPanel { background: #fff8f0; border: 1px solid #f0d9bf; '
+            'border-radius: 10px; }')
+        ind_layout = QHBoxLayout(self.indicator_panel)
+        ind_layout.setContentsMargins(16, 10, 16, 10)
+        self.bottleneck_label = QLabel()
+        self.bottleneck_label.setTextFormat(Qt.TextFormat.RichText)
+        self.bottleneck_label.setStyleSheet('font-size: 13px; color: #7a5320;')
+        ind_layout.addWidget(self.bottleneck_label)
+        layout.addWidget(self.indicator_panel)
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -207,60 +267,60 @@ class DashboardView(QWidget):
         self._load_data()
 
     def _load_data(self):
-        with get_session() as session:
-            result = session.execute(
-                select(Process).order_by(Process.created_at.desc()))
-            processes = result.scalars().all()
+        try:
+            snapshot = api.list_processes()
+            bottleneck = api.bottleneck()
+        except ApiError:
+            # The 5s timer drives this; don't spam dialogs on a transient
+            # network blip — keep the last rendered state.
+            return
 
-            total = len(processes)
-            completed = sum(1 for p in processes if p.status == 'completed')
-            in_progress = sum(1 for p in processes if p.status == 'in_progress')
-            pending = sum(1 for p in processes if p.status == 'pending')
-            self.stat_total.set_value(total)
-            self.stat_progress.set_value(in_progress)
-            self.stat_completed.set_value(completed)
-            self.stat_pending.set_value(pending)
+        # Stats are cheap label updates that never flicker, so refresh them always.
+        self.stat_total.set_value(len(snapshot))
+        self.stat_progress.set_value(
+            sum(1 for p in snapshot if p['status'] == 'in_progress'))
+        self.stat_completed.set_value(
+            sum(1 for p in snapshot if p['status'] == 'completed'))
+        self.stat_pending.set_value(
+            sum(1 for p in snapshot if p['status'] == 'pending'))
+        self._update_bottleneck(bottleneck)
 
-            while self.scroll_layout.count():
-                item = self.scroll_layout.takeAt(0)
-                if item.widget():
-                    item.widget().deleteLater()
+        # Only rebuild the cards when the data really changed; otherwise the
+        # 5s timer would tear down and recreate every widget, causing flicker
+        # and resetting the scroll position on each tick.
+        if snapshot == self._last_snapshot:
+            return
+        self._last_snapshot = snapshot
 
-            for p in processes:
-                data = {
-                    'id': p.id,
-                    'name': p.name,
-                    'status': p.status,
-                    'progress': p.progress(),
-                    'client_name': p.client.name if p.client else 'N/A',
-                    'stages': [{
-                        'id': s.id,
-                        'name': s.name,
-                        'status': s.status,
-                        'assigned_to': s.assigned_to or '',
-                    } for s in p.stages],
-                }
-                card = ProcessCard(data, self._advance_stage, self._delete_process)
-                self.scroll_layout.addWidget(card)
-            self.scroll_layout.addStretch()
+        while self.scroll_layout.count():
+            item = self.scroll_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        for data in snapshot:
+            card = ProcessCard(data, self._advance_stage,
+                               self._delete_process, self._edit_process)
+            self.scroll_layout.addWidget(card)
+        self.scroll_layout.addStretch()
+
+    def _update_bottleneck(self, stats):
+        if not stats:
+            self.bottleneck_label.setText(
+                '🔧 <b>Cuello de botella:</b> aún sin datos — completá etapas '
+                'para medir tiempos.')
+            return
+        top = stats[0]
+        avg = _fmt_seconds(top['avg_seconds'])
+        self.bottleneck_label.setText(
+            f'🔧 <b>Cuello de botella:</b> “{escape(top["name"])}” · '
+            f'promedio {avg} · {top["count"]} medición(es) completada(s)')
 
     def _advance_stage(self, stage_id):
-        with get_session() as session:
-            stage = session.get(Stage, stage_id)
-            if not stage:
-                return
-            if stage.status == 'pending':
-                stage.status = 'in_progress'
-                stage.started_at = datetime.utcnow()
-            elif stage.status == 'in_progress':
-                stage.status = 'completed'
-                stage.completed_at = datetime.utcnow()
-            else:
-                return
-            process = stage.process
-            if all(s.status == 'completed' for s in process.stages):
-                process.status = 'completed'
-            session.commit()
+        try:
+            api.advance_stage(stage_id)
+        except ApiError as exc:
+            QMessageBox.warning(self, 'Error', str(exc))
+            return
         self._load_data()
 
     def _delete_process(self, process_id):
@@ -268,13 +328,16 @@ class DashboardView(QWidget):
             self, 'Confirmar', '¿Eliminar este proceso?',
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
-            with get_session() as session:
-                process = session.get(Process, process_id)
-                if process:
-                    for s in process.stages:
-                        session.delete(s)
-                    session.delete(process)
-                    session.commit()
+            try:
+                api.delete_process(process_id)
+            except ApiError as exc:
+                QMessageBox.warning(self, 'Error', str(exc))
+                return
+            self._load_data()
+
+    def _edit_process(self, process_id):
+        dialog = ProcessDialog(self, process_id=process_id)
+        if dialog.exec():
             self._load_data()
 
     def _create_process(self):
