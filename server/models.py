@@ -79,7 +79,11 @@ class Stage(Base):
     process = relationship('Process', back_populates='stages')
 
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'app.db')
+# DB lives next to this file by default; in Docker set TRACKFLOW_DB_DIR=/data
+# (a mounted volume) so the SQLite file survives container rebuilds.
+_DB_DIR = os.environ.get('TRACKFLOW_DB_DIR') or os.path.dirname(os.path.abspath(__file__))
+os.makedirs(_DB_DIR, exist_ok=True)
+DB_PATH = os.path.join(_DB_DIR, 'app.db')
 engine = create_engine(f'sqlite:///{DB_PATH}', echo=False,
                        connect_args={'check_same_thread': False})
 SessionLocal = sessionmaker(bind=engine)

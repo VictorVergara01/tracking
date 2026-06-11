@@ -23,6 +23,36 @@ Cloudflare  ──(tunnel)──▶  nginx (Proxmox)  ──proxy──▶  uvic
 
 ---
 
+# Opción 1 — Docker (recomendada)
+
+En el LXC dedicado de TrackFlow, con Docker instalado:
+
+```bash
+apt update && apt install -y docker.io docker-compose-plugin git
+
+git clone https://github.com/VictorVergara01/tracking.git /opt/tracking
+cd /opt/tracking
+
+cp .env.example .env
+nano .env                 # TRACKFLOW_SECRET=$(openssl rand -hex 32)
+
+docker compose up -d --build
+curl -s http://127.0.0.1:8000/health      # {"status":"ok"}
+```
+
+- API + web quedan en `http://IP_LXC:8000`.
+- La base SQLite **persiste** en el volumen `trackflow_data` (sobrevive a rebuilds).
+- **Actualizar:** `cd /opt/tracking && git pull && docker compose up -d --build`
+- **Datos demo:** `docker compose exec trackflow python seed_demo.py`
+- **Logs:** `docker compose logs -f`   ·   **Backup:** copiá el volumen `trackflow_data`.
+
+Después seguí con **nginx** (sección 3) y **Cloudflare** (sección 4) — apuntan
+al puerto `8000` igual que en la opción sin Docker.
+
+---
+
+# Opción 2 — Sin Docker (systemd)
+
 ## 1. Preparar el servicio en el LXC/VM
 
 ```bash

@@ -1,0 +1,28 @@
+# TrackFlow — API + cliente web en un contenedor.
+# Uso:
+#   cp .env.example .env   &&  editar TRACKFLOW_SECRET
+#   docker compose up -d --build
+# Actualizar:  git pull && docker compose up -d --build
+# Datos demo:  docker compose exec trackflow python seed_demo.py
+
+services:
+  trackflow:
+    build: ./server
+    image: trackflow:latest
+    container_name: trackflow
+    restart: unless-stopped
+    ports:
+      - "8000:8000"            # nginx/Cloudflare apuntan acá
+    environment:
+      - TRACKFLOW_SECRET=${TRACKFLOW_SECRET:?Define TRACKFLOW_SECRET en .env}
+      - TRACKFLOW_TOKEN_TTL_HOURS=${TRACKFLOW_TOKEN_TTL_HOURS:-720}
+    volumes:
+      - trackflow_data:/data   # persiste la base SQLite
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  trackflow_data:

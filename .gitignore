@@ -9,6 +9,9 @@ env/
 .idea/
 .vscode/
 
+# Secrets (real env file; .env.example sí se versiona)
+.env
+
 # PyInstaller build output
 build/
 dist/
