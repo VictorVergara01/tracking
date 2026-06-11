@@ -1,0 +1,146 @@
+/* TrackFlow - Global Stylesheet */
+
+QMainWindow {
+    background-color: #f0f2f5;
+}
+
+QWidget {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 13px;
+    color: #1a1a2e;
+}
+
+#toolbar {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #1a1a2e, stop:1 #16213e);
+    border-bottom: 1px solid #0f3460;
+}
+
+#toolBtn {
+    background: transparent;
+    color: #ccc;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+#toolBtn:hover {
+    background: rgba(255,255,255,0.1);
+    color: white;
+}
+
+#primaryBtn {
+    background: #0f3460;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 22px;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+#primaryBtn:hover {
+    background: #1a4a7a;
+}
+
+QPushButton {
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-weight: 600;
+}
+
+QPushButton:pressed {
+    opacity: 0.8;
+}
+
+QLineEdit, QTextEdit {
+    border: 1.5px solid #ddd;
+    border-radius: 8px;
+    padding: 8px 12px;
+    background: white;
+    font-size: 13px;
+}
+
+QLineEdit:focus, QTextEdit:focus {
+    border-color: #0f3460;
+}
+
+QComboBox {
+    border: 1.5px solid #ddd;
+    border-radius: 8px;
+    padding: 8px 12px;
+    background: white;
+    min-height: 20px;
+}
+
+QComboBox:focus {
+    border-color: #0f3460;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 30px;
+}
+
+QScrollBar:vertical {
+    background: transparent;
+    width: 8px;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical {
+    background: #ccc;
+    border-radius: 4px;
+    min-height: 30px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #999;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+#loginTitle {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1a1a2e;
+}
+
+#loginSubtitle {
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 10px;
+}
+
+#loginBtn {
+    background: #0f3460;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+#loginBtn:hover {
+    background: #1a4a7a;
+}
+
+#loginHint {
+    font-size: 11px;
+    color: #999;
+    margin-top: 10px;
+}
+
+QDialog {
+    background: white;
+}
+
+QLabel {
+    background: transparent;
+}
