@@ -38,6 +38,20 @@ const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// ---- theme (dark/light) ----------------------------------------------------
+function currentTheme() {
+  return document.documentElement.getAttribute('data-theme') || 'light';
+}
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  localStorage.setItem('tf_theme', t);
+  const btn = document.getElementById('themeToggle');
+  if (btn) btn.textContent = t === 'dark' ? '☀️' : '🌙';
+}
+function toggleTheme() {
+  applyTheme(currentTheme() === 'dark' ? 'light' : 'dark');
+}
+
 function fmtSeconds(seconds) {
   let s = Math.max(Math.floor(seconds), 0);
   const d = Math.floor(s / 86400); s -= d * 86400;
@@ -389,6 +403,10 @@ window.removeProcess = removeProcess;
 window.openEdit = openEdit;
 
 function init() {
+  const themeBtn = $('#themeToggle');
+  themeBtn.textContent = currentTheme() === 'dark' ? '☀️' : '🌙';
+  themeBtn.onclick = toggleTheme;
+
   $('#loginBtn').onclick = doLogin;
   $('#loginPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
   $('#registerBtn').onclick = doRegister;
