@@ -120,7 +120,9 @@ def delete_process(process_id: int, _=Depends(require_manager)):
 
 
 @app.post('/stages/{stage_id}/advance')
-def advance_stage(stage_id: int, user=Depends(get_current_user)):
+def advance_stage(stage_id: int, user=Depends(require_manager)):
+    # Read-only clients: only managers may change stage state. A client calling
+    # this directly gets 403 from require_manager.
     changed = models.advance_stage(stage_id, user)
     return {'ok': True, 'changed': changed}
 

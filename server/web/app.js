@@ -198,16 +198,24 @@ function processCard(p, manager) {
       <div class="client-line">Cliente: ${esc(p.client_name)}</div>
       ${meta.length ? `<div class="meta-line">${meta.join('   ·   ')}</div>` : ''}
       <div class="progress"><div class="progress-fill" style="width:${Math.max(p.progress, 3)}%"></div><span class="progress-pct">${p.progress}%</span></div>
-      ${p.stages.map(stageRow).join('')}
+      ${p.stages.map((s) => stageRow(s, manager)).join('')}
     </div>`;
 }
 
-function stageRow(s) {
+function stageRow(s, manager) {
   const icon = { completed: '✔', in_progress: '●', pending: '○' }[s.status] || '○';
   let action = '';
-  if (s.status === 'pending') action = `<button class="btn-stage start" onclick="advance(${s.id})">Iniciar</button>`;
-  else if (s.status === 'in_progress') action = `<button class="btn-stage done" onclick="advance(${s.id})">Completar</button>`;
-  else action = '<span class="stage-check">✔</span>';
+  if (s.status === 'completed') {
+    action = '<span class="stage-check">✔</span>';
+  } else if (manager) {
+    // Only managers can advance stages.
+    if (s.status === 'pending') action = `<button class="btn-stage start" onclick="advance(${s.id})">Iniciar</button>`;
+    else action = `<button class="btn-stage done" onclick="advance(${s.id})">Completar</button>`;
+  } else {
+    // Read-only client: show the status, no action.
+    const label = s.status === 'in_progress' ? 'En progreso' : 'Pendiente';
+    action = `<span class="badge ${s.status}">${label}</span>`;
+  }
   const sub = [];
   if (s.assigned_to) sub.push(`Responsable: ${esc(s.assigned_to)}`);
   if (s.status === 'completed' && s.duration_text) sub.push(`⏱ ${s.duration_text}`);

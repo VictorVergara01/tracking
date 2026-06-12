@@ -1,15 +1,15 @@
 from html import escape
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-                              QScrollArea, QFrame, QPushButton, QMessageBox)
+                              QScrollArea, QFrame)
 from PyQt6.QtCore import Qt, QTimer
 from api_client import api, ApiError
 
 
 class TimelineItem(QFrame):
-    def __init__(self, stage_data, on_advance):
+    """Read-only stage row: clients can view progress but not change it."""
+    def __init__(self, stage_data):
         super().__init__()
         self.stage_id = stage_data['id']
-        self.on_advance = on_advance
         status = stage_data['status']
         colors = {
             'completed': ('#1b9c6d', '#e2f7ed', '✔'),
@@ -47,22 +47,9 @@ class TimelineItem(QFrame):
             info.addWidget(dur)
         layout.addLayout(info, 1)
 
-        if status == 'pending':
-            btn = QPushButton('Iniciar')
-            btn.setStyleSheet('background: #0f3460; color: white; border: none; '
-                              'border-radius: 6px; padding: 6px 16px; font-weight: 600;')
-            btn.clicked.connect(lambda: self.on_advance(self.stage_id))
-            layout.addWidget(btn)
-        elif status == 'in_progress':
-            btn = QPushButton('Completar')
-            btn.setStyleSheet('background: #1b9c6d; color: white; border: none; '
-                              'border-radius: 6px; padding: 6px 16px; font-weight: 600;')
-            btn.clicked.connect(lambda: self.on_advance(self.stage_id))
-            layout.addWidget(btn)
-
 
 class ProcessTrackCard(QFrame):
-    def __init__(self, process_data, on_advance):
+    def __init__(self, process_data):
         super().__init__()
         self.setStyleSheet('''
             ProcessTrackCard {
@@ -138,7 +125,7 @@ class ProcessTrackCard(QFrame):
         timeline_layout.setContentsMargins(0, 0, 0, 0)
 
         for s in process_data['stages']:
-            timeline_layout.addWidget(TimelineItem(s, on_advance))
+            timeline_layout.addWidget(TimelineItem(s))
 
         layout.addWidget(timeline_frame)
 
@@ -190,14 +177,5 @@ class TrackView(QWidget):
                 item.widget().deleteLater()
 
         for data in snapshot:
-            self.scroll_layout.addWidget(
-                ProcessTrackCard(data, self._advance_stage))
+            self.scroll_layout.addWidget(ProcessTrackCard(data))
         self.scroll_layout.addStretch()
-
-    def _advance_stage(self, stage_id):
-        try:
-            api.advance_stage(stage_id)  # server enforces ownership
-        except ApiError as exc:
-            QMessageBox.warning(self, 'Error', str(exc))
-            return
-        self._load_data()
